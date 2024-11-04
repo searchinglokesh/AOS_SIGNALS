@@ -175,39 +175,39 @@ Reliable signals address some of the limitations of unreliable signals:
 
 2. **Masking Signals**: Signals can be masked temporarily. When a process unblocks the signal, it will be posted and handled, allowing programmers to protect critical sections of code.
  
-   ```c
-#include <stdio.h>
-#include <signal.h>
-#include <unistd.h>
-
-void handler(int signum) {
-    printf("Handler invoked for signal %d\n", signum);
-}
-
-int main() {
-    struct sigaction sa;
-    sa.sa_handler = handler;
-    sa.sa_flags = 0;
-    sigemptyset(&sa.sa_mask);
-
-    // Set the handler for SIGUSR1
-    sigaction(SIGUSR1, &sa, NULL);
-
-    // Block SIGUSR1
-    sigset_t block_set;
-    sigemptyset(&block_set);
-    sigaddset(&block_set, SIGUSR1);
-    sigprocmask(SIG_BLOCK, &block_set, NULL);
-
-    printf("SIGUSR1 is blocked. Sending signal...\n");
-    raise(SIGUSR1);  // Send SIGUSR1
-
-    printf("Unblocking SIGUSR1...\n");
-    sigprocmask(SIG_UNBLOCK, &block_set, NULL);
-
-    return 0;
-}
-
+ ```c
+    #include <stdio.h>
+    #include <signal.h>
+    #include <unistd.h>
+    
+    void handler(int signum) {
+        printf("Handler invoked for signal %d\n", signum);
+    }
+    
+    int main() {
+        struct sigaction sa;
+        sa.sa_handler = handler;
+        sa.sa_flags = 0;
+        sigemptyset(&sa.sa_mask);
+    
+        // Set the handler for SIGUSR1
+        sigaction(SIGUSR1, &sa, NULL);
+    
+        // Block SIGUSR1
+        sigset_t block_set;
+        sigemptyset(&block_set);
+        sigaddset(&block_set, SIGUSR1);
+        sigprocmask(SIG_BLOCK, &block_set, NULL);
+    
+        printf("SIGUSR1 is blocked. Sending signal...\n");
+        raise(SIGUSR1);  // Send SIGUSR1
+    
+        printf("Unblocking SIGUSR1...\n");
+        sigprocmask(SIG_UNBLOCK, &block_set, NULL);
+    
+        return 0;
+    }
+```
 
 ### Sleeping Processes and Signal Handling
 Signal information is visible to the kernel, allowing for selective handling of signals while a process is sleeping. Ignored signals will not interrupt the sleep:
