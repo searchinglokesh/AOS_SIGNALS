@@ -1,5 +1,8 @@
 # Signal Handling in Unix
 
+## Introduction
+This document provides an overview of signal handling in Unix, including the types of signals, the signaling process, and practical code examples. Signal handling is a fundamental aspect of Unix system programming, allowing processes to respond to asynchronous events such as interrupts and exceptions.
+
 ## What are Signals?
 Signals are a mechanism that allows a procedure to be invoked in response to a defined set of events. They provide a way for processes to communicate with each other and handle exceptional conditions.
 
@@ -116,7 +119,7 @@ int main() {
 
     return 0;
 }
-```
+
 
 # Issues with Unreliable Signals
 
@@ -134,83 +137,83 @@ Unreliable signals present several challenges in Unix-based systems:
 
 4. **No Support for Job Control**: There is no ability to group processes and suspend or resume them collectively.
 
----
 
 # Advantages of Reliable Signals
 
-Reliable signals address some of the limitations of unreliable signals:
+## Persistent Handler
+Signal handlers remain installed even after the signal occurs, eliminating the need for explicit reinstallation.
 
-1. **Persistent Handlers**: Signal handlers remain installed even after a signal occurs, eliminating the need for explicit reinstallation.
+```c
+#include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
 
-   ```c
-   #include <stdio.h>
-   #include <signal.h>
-   #include <unistd.h>
+void handler(int signum) {
+    printf("Persistent handler for signal %d invoked.\n", signum);
+}
 
-   void handler(int signum) {
-       printf("Persistent handler for signal %d invoked.\n", signum);
-   }
+int main() {
+    struct sigaction sa;
+    sa.sa_handler = handler;
+    sa.sa_flags = 0;  // No special flags
+    sigemptyset(&sa.sa_mask);
 
-   int main() {
-       struct sigaction sa;
-       sa.sa_handler = handler;
-       sa.sa_flags = 0;  // No special flags
-       sigemptyset(&sa.sa_mask);
-
-       // Set the handler for SIGINT (Ctrl+C) to make it persistent
-       if (sigaction(SIGINT, &sa, NULL) == -1) {
-           perror("sigaction");
-           return 1;
-       }
-
-       printf("Press Ctrl+C to invoke the handler.\n");
-
-       // Infinite loop to keep the program running
-       while (1) {
-           sleep(1);
-       }
-
-       return 0;
-   }
-
-2. **Masking Signals**: Signals can be masked temporarily. When a process unblocks the signal, it will be posted and handled, allowing programmers to protect critical sections of code.
- 
- ```c
-    #include <stdio.h>
-    #include <signal.h>
-    #include <unistd.h>
-    
-    void handler(int signum) {
-        printf("Handler invoked for signal %d\n", signum);
+    // Set the handler for SIGINT (Ctrl+C) with `sigaction` to make it persistent
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction");
+        return 1;
     }
-    
-    int main() {
-        struct sigaction sa;
-        sa.sa_handler = handler;
-        sa.sa_flags = 0;
-        sigemptyset(&sa.sa_mask);
-    
-        // Set the handler for SIGUSR1
-        sigaction(SIGUSR1, &sa, NULL);
-    
-        // Block SIGUSR1
-        sigset_t block_set;
-        sigemptyset(&block_set);
-        sigaddset(&block_set, SIGUSR1);
-        sigprocmask(SIG_BLOCK, &block_set, NULL);
-    
-        printf("SIGUSR1 is blocked. Sending signal...\n");
-        raise(SIGUSR1);  // Send SIGUSR1
-    
-        printf("Unblocking SIGUSR1...\n");
-        sigprocmask(SIG_UNBLOCK, &block_set, NULL);
-    
-        return 0;
+
+    printf("Press Ctrl+C to invoke the handler.\n");
+
+    // Infinite loop to keep the program running
+    while (1) {
+        sleep(1);
     }
+
+    return 0;
+}
 ```
 
-### Sleeping Processes and Signal Handling
-Signal information is visible to the kernel, allowing for selective handling of signals while a process is sleeping. Ignored signals will not interrupt the sleep:
+## Masking
+Signals can be temporarily masked. When the process unlocks the signal, the signal will be posted and handled. This allows programmers to protect critical sections of code.
+
+```c
+#include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
+
+void handler(int signum) {
+    printf("Handler invoked for signal %d\n", signum);
+}
+
+int main() {
+    struct sigaction sa;
+    sa.sa_handler = handler;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+
+    // Set the handler for SIGUSR1
+    sigaction(SIGUSR1, &sa, NULL);
+
+    // Block SIGUSR1
+    sigset_t block_set;
+    sigemptyset(&block_set);
+    sigaddset(&block_set, SIGUSR1);
+    sigprocmask(SIG_BLOCK, &block_set, NULL);
+
+    printf("SIGUSR1 is blocked. Sending signal...\n");
+    raise(SIGUSR1);  // Send SIGUSR1
+
+    printf("Unblocking SIGUSR1...\n");
+    sigprocmask(SIG_UNBLOCK, &block_set, NULL);
+
+    return 0;
+}
+```
+
+## Sleeping Processes
+Some signal information is visible to the kernel. If a signal is sent to a process that is in interruptible sleep and the signal handler is set to ignore it, the kernel will not wake it up.
 
 ```c
 #include <stdio.h>
@@ -237,8 +240,8 @@ int main() {
 }
 ```
 
-### Unblocking and Waiting for Signals
-The `sigpause` function can be used to unblock a signal and wait for it to arrive:
+## Unblock and Wait
+Using `sigpause` to unblock and wait for a signal to arrive.
 
 ```c
 #include <stdio.h>
@@ -282,136 +285,117 @@ int main() {
 }
 ```
 
-## Limitations of SVR4 Signal Handling
+## Issues with SVR4
+SVR4 provides all the reliable features but has the following limitations:
+1. **Single Signal Handling**: `sighold`, `sigrelse`, and `sigpause` operate on only one signal at a time. If multiple signals need to be blocked or unblocked, there is no good way to handle them, which can lead to race conditions.
+2. **No Job Control**: Processes cannot be grouped and managed collectively.
+3. **No Automatic System Call Restarting**: If a signal interrupts a system call, the system call fails and needs to be explicitly restarted by the program.
 
-While SVR4 provides reliable signal handling, it has several limitations:
+## Improvements in BSD (4.2)
+BSD (4.2) provided the following enhancements:
+1. **Signal Masking with `sigsetmask` and `sigblock`**: A 32-bit bitmask representing signals offers more control over blocking and unblocking signals to avoid race conditions.
 
-1. **Single Signal Handling:**
-   - The `sighold`, `sigrelse`, and `sigpause` functions can only operate on a single signal at a time.
-   - This makes it difficult to manage multiple signals and can lead to race conditions.
-2. **No Job Control:**
-   - SVR4 lacks mechanisms for grouping and managing processes collectively.
-3. **No Automatic System Call Restarting:**
-   - If a signal interrupts a system call, the system call fails and must be explicitly restarted by the program.
+    ```c
+    #include <stdio.h>
+    #include <signal.h>
+    #include <unistd.h>
 
+    void handler(int sig) {
+        printf("Signal %d received\n", sig);
+    }
 
-**BSD (4.2) Enhancements**
+    int main() {
+        // Block SIGINT and SIGTERM
+        int mask = sigmask(SIGINT) | sigmask(SIGTERM);
+        sigblock(mask);
 
-BSD 4.2 introduced several significant improvements in signal handling:
+        // Install signal handler
+        signal(SIGINT, handler);
 
-### 1. Signal Masking with `sigsetmask` and `sigblock`
-These functions provide finer control over blocking and unblocking signals, reducing the risk of race conditions:
+        // Unblock all signals in the mask and wait for a signal
+        sigsetmask(0);  // Clear all masks (unblock)
+        
+        printf("Signals unblocked, waiting for SIGINT...\n");
+        pause();
 
-```c
-#include <stdio.h>
-#include <signal.h>
-#include <unistd.h>
+        return 0;
+    }
+    ```
 
-void handler(int sig) {
-    printf("Signal %d received\n", sig);
-}
+2. **Persistent Handlers with `sigvec`**: `sigvec` replaces the `signal` call, allowing persistent handling and specifying a mask to temporarily block signals.
 
-int main() {
-    // Block SIGINT and SIGTERM
-    int mask = sigmask(SIGINT) | sigmask(SIGTERM);
-    sigblock(mask);
+    ```c
+    #include <stdio.h>
+    #include <signal.h>
+    #include <unistd.h>
 
-    // Install signal handler
-    signal(SIGINT, handler);
+    void handler(int sig) {
+        printf("Handled signal %d\n", sig);
+    }
 
-    // Unblock all signals in the mask and wait for a signal
-    sigsetmask(0);  // Clear all masks (unblock)
+    int main() {
+        struct sigvec sv;
+        sv.sv_handler = handler;
+        sv.sv_mask = sigmask(SIGTERM);  // Block SIGTERM while SIGINT handler runs
+        sv.sv_flags = 0;
 
-    printf("Signals unblocked, waiting for SIGINT...\n");
-    pause();
+        // Install the handler with `sigvec`
+        sigvec(SIGINT, &sv, NULL);
 
-    return 0;
-}
-```
+        printf("Waiting for SIGINT...\n");
+        pause();
 
-### 2. Persistent Handlers with `sigvec`
-The `sigvec` function replaces the older `signal` function, allowing for persistent handlers and the specification of a signal mask to temporarily block signals during handler execution:
+        return 0;
+    }
+    ```
 
-```c
-#include <stdio.h>
-#include <signal.h>
-#include <unistd.h>
+3. **Separate Signal Stacks with `sigstack`**: This allows signal handlers to run on a separate stack, managing user-defined stacks or avoiding stack overflow.
 
-void handler(int sig) {
-    printf("Handled signal %d\n", sig);
-}
+    ```c
+    #include <stdio.h>
+    #include <signal.h>
+    #include <stdlib.h>
+    #include <unistd.h>
 
-int main() {
-    struct sigvec sv;
-    sv.sv_handler = handler;
-    sv.sv_mask = sigmask(SIGTERM);  // Block SIGTERM while SIGINT handler runs
-    sv.sv_flags = 0;
+    void handler(int sig) {
+        printf("Handled signal %d on alternate stack\n", sig);
+    }
 
-    // Install the handler with `sigvec`
-    sigvec(SIGINT, &sv, NULL);
+    int main() {
+        char alternate_stack[8192];  // Define a separate stack
 
-    printf("Waiting for SIGINT...\n");
-    pause();
+        struct sigstack ss;
+        ss.ss_sp = alternate_stack;
+        ss.ss_onstack = 1;
 
-    return 0;
-}
-```
+        // Set up the separate stack for signal handling
+        sigstack(&ss, NULL);
 
-### 3. Separate Signal Stacks with `sigstack`
-This allows signal handlers to run on separate stacks, useful for managing user-defined stacks or avoiding stack overflows:
+        struct sigvec sv;
+        sv.sv_handler = handler;
+        sv.sv_mask = 0;
+        sv.sv_flags = SA_ONSTACK;
 
-```c
-#include <stdio.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <unistd.h>
+        // Install the handler to use the alternate stack
+        sigvec(SIGSEGV, &sv, NULL);
 
-void handler(int sig) {
-    printf("Handled signal %d on alternate stack\n", sig);
-}
+        // Trigger a segmentation fault (SIGSEGV)
+        printf("Triggering SIGSEGV...\n");
+        int *ptr = NULL;
+        *ptr = 1;  // This will cause a SIGSEGV
 
-int main() {
-    char alternate_stack[8192];  // Define a separate stack
+        return 0;
+    }
+    ```
 
-    struct sigstack ss;
-    ss.ss_sp = alternate_stack;
-    ss.ss_onstack = 1;
-
-    // Set up the separate stack for signal handling
-    sigstack(&ss, NULL);
-
-    struct sigvec sv;
-    sv.sv_handler = handler;
-    sv.sv_mask = 0;
-    sv.sv_flags = SA_ONSTACK;
-
-    // Install the handler to use the alternate stack
-    sigvec(SIGSEGV, &sv, NULL);
-
-    // Trigger a segmentation fault (SIGSEGV)
-    printf("Triggering SIGSEGV...\n");
-    int *ptr = NULL;
-    *ptr = 1;  // This will cause a SIGSEGV
-
-    return 0;
-}
-```
-
-**SVR4 Signal Handling Enhancements**
-
-SVR4 introduced several improvements in signal handling:
-
-* **`sigprocmask`:** Provides more flexible control over signal masking.
-* **`SIGALTSTACK`:** Allows for the use of alternate signal stacks.
-* **`SIGSUSPEND`:** Provides atomic suspension of a process with a new signal mask.
-* **`SIGACTION`:** Offers more advanced signal handling capabilities, including additional information about the signal.
+4. **Job Control and Automatic Restart of System Calls**
 
 
-**SVR4 Signal Handling Enhancements**
+# Signals in SVR4
 
-SVR4 introduced several improvements in signal handling:
+## 1) `sigprocmask`
+`sigprocmask` is used to manipulate the signal mask to block, unblock, or set signals. It is very useful for critical sections.
 
-* **`sigprocmask`:** Provides more flexible control over signal masking.
 ```c
 #include <stdio.h>
 #include <signal.h>
@@ -422,7 +406,7 @@ void handler(int sig) {
 
 int main() {
     sigset_t mask, oldmask;
-
+    
     // Initialize signal set to include SIGINT
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT);
@@ -450,8 +434,12 @@ int main() {
 }
 ```
 
-* **`SIGALTSTACK`:** Allows for the use of alternate signal stacks.
-* **`SIGSUSPEND`:** Provides atomic suspension of a process with a new signal mask.
+## 2) `SIGALTSTACK`
+`SIGALTSTACK` allows the use of a new stack to handle signals.
+
+## 3) `SIGSUSPEND`
+`SIGSUSPEND` enables a process to set a new mask and suspend itself until a signal arrives. This is atomic.
+
 ```c
 #include <stdio.h>
 #include <signal.h>
@@ -478,7 +466,7 @@ int main() {
     sigaction(SIGINT, &act, NULL);
 
     printf("Waiting for SIGINT...\n");
-
+    
     // Suspend with SIGINT unblocked, waiting for a signal
     sigsuspend(&oldmask);
 
@@ -486,7 +474,9 @@ int main() {
 }
 ```
 
-* **`SIGACTION`:** Offers more advanced signal handling capabilities, including additional information about the signal.
+## 4) `SIGACTION`
+`SIGACTION` is used to set up signal handlers and can provide additional information about the signal received.
+
 ```c
 #include <stdio.h>
 #include <signal.h>
@@ -511,61 +501,95 @@ int main() {
 }
 ```
 
-**Kernel-Level Signal Handling**
+# States of Signals in Kernel
 
-* **U_AREA:**
-    * `u_signal`: Vector of signal handlers for each signal.
-    * `u_sigmask[]`: Signal masks associated with each handler.
-    * `u_signalstack`: Pointer to the alternative signal stack.
-    * `u_sigonstack`: Mask of signals to handle on the alternative stack.
-    * `u_oldsig`: Set of handlers that exhibit the old, unreliable behavior.
+## U_AREA
+- **u_signal**: A vector of signal handlers for each signal.
+- **u_sigmask[]**: Signal masks associated with each handler.
+- **u_signalstack**: A pointer to the alternative signal stack.
+- **u_sigonstack**: A mask of signals to handle on the alternative stack.
+- **u_oldsig**: A set of handlers that exhibit the old, unreliable behavior.
 
-* **PROC:**
-    * `p_cursig`: The current signal being handled.
-    * `p_sig`: Pending signal masks.
-    * `p_hold`: ...
-    * `p_ignore`: ...
+## PROC
+- **p_cursig**: The current signal being handled.
+- **p_sig**: Pending signal masks.
+- **p_hold**: 
+- **p_ignore**: 
 
-**Signal Delivery and Handling**
+# What Happens When a Signal is Generated
 
-1. **Signal Check:** The kernel checks if the signal is ignored or not.
-2. **Pending Signals:** If not ignored, the signal is added to the `p_cursig` mask.
-3. **Process Wakeup:** If the process is in an interruptible sleep state and the signal is not blocked, the kernel wakes up the process.
+1. **Signal Check**: The kernel first checks the process structure of the receiving process to determine if it has ignored the signal. If the signal is not ignored, it takes action.
+2. **Pending Signals**: If the signal is not ignored, it is added to `p_cursig`. Only one instance is stored since it uses a bitmask (0 or 1).
+3. **Process Wakeup**: If the process is in an interruptible sleep state and the signal is not blocked, the kernel wakes up the process.
 
-**Signal Delivery and Handling Process**
+# How Are Signals Delivered and Handled?
 
-1. **Signal Check:** `issig()` checks for pending signals.
-2. **Blocked Signals:** If `issig()` is true, the `p_hold` mask is checked to see if the signal is ready to be processed.
-3. **Signal Handling:** `psig()` handles the signal.
-4. **Flags and Behavior:** The `SA_NODEFER` flag allows a signal to remain unblocked while its handler is running.
-5. **Executing the Handler:** `psig()` and `sendsig()` transition the process from kernel mode to user mode.
+1. **Signal Check**: The function `issig()` checks for pending signals.
+2. **Blocked Signals**: If `issig()` returns true, the kernel checks if the `p_hold` mask has a signal, indicating that it is ready to process.
+3. **Signal Handling**: The function `psig()` is used to handle the signal.
+4. **Flags and Behavior**: The flag `SA_NODEFER` allows the signal to remain unblocked while its handler runs.
+5. **Executing the Handler**: The functions `psig()` and `sendsig()` transition the process from kernel mode to user mode to execute the handler.
 
-**Exceptions and Their Handling**
+# What Are Exceptions and How Are They Handled?
 
 1. **Signal Generation**
-2. **User-defined Handlers**
+2. **User-Defined Handlers**
 3. **Debugger Interaction**
 
-**Limitations of Unix Signal Handling**
+# Why Unix Is Poor with Exception Handling
 
-1. **Context Limitation:** The kernel only provides a portion of the process's context to the signal handler.
-2. **Single-Threaded Focus:** Signals are primarily designed for single-threaded processes.
-3. **Limited Debugging Capabilities:** `p_trace` has limited scope for debugging.
+1. **Context Limitation**: The kernel only has a portion of the context available to the handler.
+2. **Single-Thread Focus**: Signals are designed primarily for single-threaded processes.
+3. **Limited Scope for Debugging**: The `p_trace` functionality has limited capability for debugging.
 
-**Process Groups and Sessions**
+# What Is a Process Group?
 
-* **Process Group:** A group of processes with a common parent.
-* **Session:** A group of process groups.
-* **Controlling Terminal:** A terminal associated with a session.
+Every process belongs to a process group identified by its process group ID (PGID). The kernel can perform actions on all processes within a group. Each group has a leader or parent, and processes inherit their PGID from their parent.
 
-**SVR4 Session and Process Group Management**
+# What Is the Special File That Represents the Controlling Terminal of Each Process?
 
-* **`setsid`:** Creates a new session.
-* **Session Leader:** Responsible for managing the session.
-* **Controlling Terminal:** Associated with a session and foreground process group.
+The special file is `/dev/tty`.
 
-**4.4BSD Improvements**
+# What Is a Controlling Group?
 
-* The process structure no longer directly references the session object but instead points to a process group object that links to the session structure.
+The terminal is associated with a process group identified in the terminal's structure.
 
+# How Does SVR3 Manage?
 
+- **Process Groups**: Managed using `fork()` and `setpgrp()` to change the process group.
+- **Controlling Terminal**: The terminal is linked to the controlling group.
+- **Terminal Access**: No job control is provided.
+- **Terminal Signals**: 
+- **Death of Group Leader**: Leads to dissociation from the controlling terminal.
+
+### Limitations
+- Lack of ability for a group to close its controlling terminal and allocate a new one.
+- Login sessions cannot persist after disconnecting from the controlling terminal.
+- Loss of carrier is not handled.
+
+# What Improvements Does BSD (4.3) Offer Over SVR3, and What Drawbacks Remain?
+
+1. **Lack of Clear Representation**: The lack of a clear representation of login sessions can lead to issues.
+2. **Absence of a Single Responsible Process**: 
+3. **Terminal's Controlling Group**: Processes can change the terminal's controlling group, leading to complications.
+
+# How Does SVR4 Manage Sessions and Process Groups?
+
+1. Each process belongs to both a session and a process group.
+2. The controlling terminal is associated with a session and the foreground process group.
+3. The session leader is responsible for managing the session.
+4. The `setsid` function is used to create a new session.
+
+# SVR4 Data Structures
+
+1. The `setsid` call allocates a new session structure.
+2. When the session leader opens a terminal, it becomes the controlling terminal for that session.
+3. Child processes inherit pointers to the session structure.
+
+# What Are the Controlling Terminals?
+
+The `/dev/tty` file serves as an alias for the controlling terminal.
+
+# Improvements of 4.4BSD
+
+1. The process structure does not directly reference the session object but instead points to the process group object that links to the session structure.
