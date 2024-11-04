@@ -119,7 +119,7 @@ int main() {
 
     return 0;
 }
-
+```
 
 # Issues with Unreliable Signals
 
@@ -138,7 +138,7 @@ Unreliable signals present several challenges in Unix-based systems:
 4. **No Support for Job Control**: There is no ability to group processes and suspend or resume them collectively.
 
 
-# Advantages of Reliable Signals
+# What are the Advantages of Reliable Signals
 
 ## Persistent Handler
 Signal handlers remain installed even after the signal occurs, eliminating the need for explicit reinstallation.
