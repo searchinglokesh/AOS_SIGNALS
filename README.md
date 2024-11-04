@@ -1,8 +1,5 @@
 # Signal Handling in Unix
 
-## Introduction
-This document provides an overview of signal handling in Unix, including the types of signals, the signaling process, and practical code examples. Signal handling is a fundamental aspect of Unix system programming, allowing processes to respond to asynchronous events such as interrupts and exceptions.
-
 ## What are Signals?
 Signals are a mechanism that allows a procedure to be invoked in response to a defined set of events. They provide a way for processes to communicate with each other and handle exceptional conditions.
 
