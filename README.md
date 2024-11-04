@@ -295,8 +295,6 @@ While SVR4 provides reliable signal handling, it has several limitations:
    - If a signal interrupts a system call, the system call fails and must be explicitly restarted by the program.
 
 
-**Here's the improved Markdown version:**
-
 **BSD (4.2) Enhancements**
 
 BSD 4.2 introduced several significant improvements in signal handling:
